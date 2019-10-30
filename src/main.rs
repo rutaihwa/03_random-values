@@ -1,14 +1,33 @@
 use clap::{
     crate_authors, crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand,
 };
-use hyper::rt::Future;
-use hyper::service::service_fn_ok;
-use hyper::{Body, Response, Server};
-use log::{debug, info, trace};
+
+use hyper::{rt::Future, service::service_fn_ok, Body, Response, Server};
+use log::{debug, info, trace, warn};
 use pretty_env_logger as logger;
-use std::env;
+use serde_derive::Deserialize;
+use std::{
+    env,
+    fs::File,
+    io::{self, Read},
+    net::SocketAddr,
+};
 
 fn main() {
+    // Reading a config file
+    let config = File::open("random_service.toml")
+        .and_then(|mut file| {
+            let mut buffer = String::new();
+            file.read_to_string(&mut buffer)?;
+            Ok(buffer)
+        })
+        .and_then(|buffer| {
+            toml::from_str::<Config>(&buffer)
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+        })
+        .map_err(|err| warn!("Can't read config file: {}", err))
+        .ok();
+
     // Argument parser and subcommands
     let matches = App::new(crate_name!())
         .version(crate_version!())
@@ -49,10 +68,12 @@ fn main() {
         .value_of("address")
         .map(|s| s.to_owned())
         .or(env::var("ADDRESS").ok())
+        .and_then(|addr| addr.parse().ok())
         .or(dotenv::var("ADDRESS").ok())
-        .unwrap_or_else(|| "127.0.0.1:8080".into())
-        .parse()
-        .expect("Could'nt parse ADDRESS variable");
+        .and_then(|addr| addr.parse().ok())
+        .or(config.map(|config| config.address))
+        .or_else(|| Some(([127, 0, 0, 1], 8080).into()))
+        .unwrap();
 
     debug!("Trying to bind server to address: {}", addr);
     let builder = Server::bind(&addr);
@@ -74,4 +95,10 @@ fn main() {
 
     debug!("Run");
     hyper::rt::run(server);
+}
+
+// Config
+#[derive(Deserialize)]
+struct Config {
+    address: SocketAddr,
 }

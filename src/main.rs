@@ -1,4 +1,6 @@
-use clap::{crate_authors, crate_description, crate_name, crate_version, App, Arg};
+use clap::{
+    crate_authors, crate_description, crate_name, crate_version, App, AppSettings, Arg, SubCommand,
+};
 use hyper::rt::Future;
 use hyper::service::service_fn_ok;
 use hyper::{Body, Response, Server};
@@ -7,27 +9,33 @@ use pretty_env_logger as logger;
 use std::env;
 
 fn main() {
-    // Argument parser
+    // Argument parser and subcommands
     let matches = App::new(crate_name!())
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
-        .arg(
-            Arg::with_name("address")
-                .short("a")
-                .long("address")
-                .value_name("ADDRESS")
-                .help("Sets an address")
-                .takes_value(true),
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(
+            SubCommand::with_name("run")
+                .about("Run the server")
+                .arg(
+                    Arg::with_name("address")
+                        .short("a")
+                        .long("address")
+                        .value_name("ADDRESS")
+                        .help("Sets an address")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("config")
+                        .short("c")
+                        .long("config")
+                        .value_name("FILE")
+                        .help("Sets a custom config file")
+                        .takes_value(true),
+                ),
         )
-        .arg(
-            Arg::with_name("config")
-                .short("c")
-                .long("config")
-                .value_name("FILE")
-                .help("Sets a custom config file")
-                .takes_value(true),
-        )
+        .subcommand(SubCommand::with_name("key").about("Generates a secret key for cookies"))
         .get_matches();
 
     // Initialize logger
